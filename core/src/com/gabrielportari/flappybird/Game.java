@@ -2,8 +2,11 @@ package com.gabrielportari.flappybird;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -12,13 +15,16 @@ import com.badlogic.gdx.math.Circle;
 import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.badlogic.gdx.utils.viewport.StretchViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
 
 import java.util.Random;
 
 public class Game extends ApplicationAdapter {
 	private SpriteBatch spriteBatch;
 	private Random random;
-	private int score;
+	private int score = 0;
+	private int maxScore = 0;
 	private boolean isScore;
 
 	private int GAME_STATUS = GAME_PAUSED;
@@ -55,6 +61,13 @@ public class Game extends ApplicationAdapter {
 	private Sound colisionSound;
 	private Sound scoreSound;
 
+	private Preferences preferences;
+
+	private OrthographicCamera orthographicCamera;
+	private Viewport viewport;
+	private final float VIRTUAL_WIDTH = 720;
+	private final float VIRTUAL_HEIGHT = 1280;
+
 	@Override
 	public void create () {
 		initializeTexture();
@@ -63,6 +76,9 @@ public class Game extends ApplicationAdapter {
 
 	@Override
 	public void render () {
+		//limpar frames
+		Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+
 		gameStateVerify();
 		scoreValidation();
 		drawTextures();
@@ -70,6 +86,8 @@ public class Game extends ApplicationAdapter {
 	}
 
 	private void drawTextures(){
+		spriteBatch.setProjectionMatrix(orthographicCamera.combined);
+
 		spriteBatch.begin();
 
 		spriteBatch.draw(background, 0, 0, deviceWidth, deviceHeight);
@@ -83,8 +101,8 @@ public class Game extends ApplicationAdapter {
 
 		if (GAME_STATUS == GAME_ENDED){
 			spriteBatch.draw(gameOver, deviceWidth/2-gameOver.getWidth()/2, deviceHeight/2-gameOver.getHeight()/2);
-			textRestart.draw(spriteBatch, "Toque para reiniciar", deviceWidth/2 - 200, deviceHeight/2 - gameOver.getHeight()/2 - 10);
-			textHigherScore.draw(spriteBatch, "Seu record é 0 pontos", deviceWidth/2 - 220, deviceHeight/2 - gameOver.getHeight() - 20);
+			textRestart.draw(spriteBatch, "Toque para reiniciar", deviceWidth/2 - 140, deviceHeight/2 - gameOver.getHeight()/2 - 10);
+			textHigherScore.draw(spriteBatch, "Seu recorde é " + maxScore + " pontos", deviceWidth/2 - 140, deviceHeight/2 - gameOver.getHeight() - 20);
 		}
 		spriteBatch.end();
 	}
@@ -108,8 +126,8 @@ public class Game extends ApplicationAdapter {
 
 		random = new Random();
 
-		deviceWidth = Gdx.graphics.getWidth();
-		deviceHeight = Gdx.graphics.getHeight();
+		deviceWidth = (int) VIRTUAL_WIDTH;
+		deviceHeight = (int) VIRTUAL_HEIGHT;
 		birdStartHeight = deviceHeight/2;
 		pipeWidth = deviceWidth;
 		pipeSpacement = 300;
@@ -122,12 +140,12 @@ public class Game extends ApplicationAdapter {
 		//texto para reiniciar
 		textRestart = new BitmapFont();
 		textRestart.setColor(Color.GREEN);
-		textRestart.getData().setScale(3);
+		textRestart.getData().setScale(2);
 
 		//melhor placar
 		textHigherScore = new BitmapFont();
 		textHigherScore.setColor(Color.RED);
-		textHigherScore.getData().setScale(3);
+		textHigherScore.getData().setScale(2);
 
 
 		//formas para colisões
@@ -140,6 +158,22 @@ public class Game extends ApplicationAdapter {
 		flyingSound = Gdx.audio.newSound(Gdx.files.internal("som_asa.wav"));
 		colisionSound = Gdx.audio.newSound(Gdx.files.internal("som_batida.wav"));
 		scoreSound = Gdx.audio.newSound(Gdx.files.internal("som_pontos.wav"));
+
+		//recuperar scores
+		preferences = Gdx.app.getPreferences("flappyBirdMaxScore");
+		maxScore = preferences.getInteger("maxScore", 0);
+
+		//configuracoes camera
+		orthographicCamera = new OrthographicCamera();
+		orthographicCamera.position.set(VIRTUAL_WIDTH/2, VIRTUAL_HEIGHT/2, 0);
+		viewport = new StretchViewport(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, orthographicCamera);
+
+	}
+
+
+	@Override
+	public void resize(int width, int height) {
+		viewport.update(width, height);
 	}
 
 	private void gameStateVerify(){
@@ -156,6 +190,11 @@ public class Game extends ApplicationAdapter {
 				flyingSound.play();
 			}
 		}else if(GAME_STATUS == GAME_STARTED){
+			//recuperar pontuação
+			if(score > maxScore){
+				maxScore = score;
+				preferences.putInteger("maxScore", maxScore);
+			}
 			// movimentação do cano
 			pipeWidth -= Gdx.graphics.getDeltaTime() * 400; // velocidade do cano
 			if(pipeWidth < -bottomPipe.getWidth()){ // recriar o cano ao chegar no fim
